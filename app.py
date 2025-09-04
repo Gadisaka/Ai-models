@@ -8,6 +8,13 @@ app = Flask(__name__)
 temp_model = tf.keras.models.load_model("temperature_model.keras")
 hum_model = tf.keras.models.load_model("humidity_model.keras")
 
+# Min/Max for denormalization
+MIN_TEMP, MAX_TEMP = 3.0, 90.0
+MIN_HUM, MAX_HUM = 4.0, 243.0
+
+def denorm(x, min_v, max_v):
+    return x * (max_v - min_v) + min_v
+
 @app.route("/")
 def home():
     return {"message": "AI Model API running on Railway 🚀"}
@@ -16,9 +23,13 @@ def home():
 def predict_temp():
     try:
         data = request.json["data"]  # expects list of 24 numbers
-        arr = np.array(data, dtype=float).reshape(1, 24, 1)  # reshape for LSTM/GRU
-        prediction = temp_model.predict(arr).tolist()
-        return jsonify({"prediction": prediction})
+        arr = np.array(data, dtype=float).reshape(1, 24, 1)  # reshape for LSTM
+        pred = temp_model.predict(arr).tolist()  # [[scaled]]
+        scaled = float(pred[0][0])
+        return jsonify({
+            "scaled": scaled,
+            "denorm": denorm(scaled, MIN_TEMP, MAX_TEMP)
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -27,8 +38,12 @@ def predict_hum():
     try:
         data = request.json["data"]
         arr = np.array(data, dtype=float).reshape(1, 24, 1)
-        prediction = hum_model.predict(arr).tolist()
-        return jsonify({"prediction": prediction})
+        pred = hum_model.predict(arr).tolist()
+        scaled = float(pred[0][0])
+        return jsonify({
+            "scaled": scaled,
+            "denorm": denorm(scaled, MIN_HUM, MAX_HUM)
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
